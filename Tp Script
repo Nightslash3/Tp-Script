@@ -1,0 +1,100 @@
+local UserInputService = game:GetService("UserInputService")
+local VRService = game:GetService("VRService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+
+local function getCharacter()
+    return player.Character
+end
+
+local function isValidPosition(position)
+    local radius = 2 
+    local parts = workspace:FindPartsInRegion3(
+        Region3.new(
+            position - Vector3.new(radius, radius, radius),
+            position + Vector3.new(radius, radius, radius)
+        ),
+        nil, 
+        100
+    )
+    
+    local solidParts = 0
+    for _, part in ipairs(parts) do
+        if part.CanCollide then
+            solidParts = solidParts + 1
+        end
+    end
+    
+    return solidParts > 0
+end
+
+local function teleport(targetPosition)
+    local char = getCharacter()
+    if not char then return end
+    
+  
+    local originalPosition = char.HumanoidRootPart.Position
+    
+    if isValidPosition(targetPosition) then
+        char:MoveTo(targetPosition)
+        print("Teleported to valid location")
+    else
+        
+        char:MoveTo(originalPosition)
+        print("Teleport destination invalid (only air). Returned to original position.")
+    end
+end
+
+
+local leftTriggerHeld = false
+if VRService.VREnabled then
+    print("VR is enabled; using VR teleportation.")
+    
+    local function getRightControllerPointer()
+        local camera = workspace.CurrentCamera
+        local rightCFrame = VRService:GetUserCFrame(Enum.UserCFrame.RightHand)
+        local handWorld = camera.CFrame * rightCFrame 
+        local origin = handWorld.Position
+        local direction = handWorld.LookVector
+        local ray = Ray.new(origin, direction * 1000) 
+        local hit, hitPos = workspace:FindPartOnRay(ray, getCharacter())
+        if hit then
+            return hitPos
+        else
+            return origin + direction * 1000
+        end
+    end
+    
+
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.ButtonL2 then
+            leftTriggerHeld = true
+        end
+        
+        if leftTriggerHeld and input.KeyCode == Enum.KeyCode.ButtonR2 then
+            local targetPos = getRightControllerPointer()
+            teleport(targetPos)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.ButtonL2 then
+            leftTriggerHeld = false
+        end
+    end)
+    
+else
+    print("VR is not enabled; using standard teleportation.")
+    
+    local Mouse = player:GetMouse()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            teleport(Mouse.Hit.p)
+        end
+    end)
+end
